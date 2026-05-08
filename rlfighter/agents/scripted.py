@@ -95,14 +95,15 @@ class ScriptedController(Controller):
                     return (ActionType.DODGE.value, 8)
 
         # 0. Face the target before committing to an attack.
-        #    Only when reckless do we skip this and attack regardless of facing.
+        #    When idle we can snap to the exact angle in-place (no movement needed).
         max_attack_range = max(
             FRAME_DATA[ActionType.VERTICAL].length,
             FRAME_DATA[ActionType.THRUST].length,
             FRAME_DATA[ActionType.HORIZONTAL].range,
         )
-        if not reckless and dist <= max_attack_range and face_diff > math.radians(30):
-            return (ActionType.NOOP.value, self._move_dir(me, target))
+        if me.phase == Phase.IDLE and dist <= max_attack_range and face_diff > math.radians(30):
+            me.facing = angle_to_target
+            return (ActionType.NOOP.value, 8)
 
         # 3. Thrust if close and facing
         thrust_data = FRAME_DATA[ActionType.THRUST]
