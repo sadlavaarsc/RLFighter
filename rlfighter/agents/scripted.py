@@ -94,10 +94,20 @@ class ScriptedController(Controller):
                 if can_hit:
                     return (ActionType.DODGE.value, 8)
 
+        # 0. Face the target before committing to an attack.
+        #    Only when reckless do we skip this and attack regardless of facing.
+        max_attack_range = max(
+            FRAME_DATA[ActionType.VERTICAL].length,
+            FRAME_DATA[ActionType.THRUST].length,
+            FRAME_DATA[ActionType.HORIZONTAL].range,
+        )
+        if not reckless and dist <= max_attack_range and face_diff > math.radians(30):
+            return (ActionType.NOOP.value, self._move_dir(me, target))
+
         # 3. Thrust if close and facing
         thrust_data = FRAME_DATA[ActionType.THRUST]
         if dist <= thrust_data.length and face_diff < math.radians(15):
-            return (ActionType.THRUST.value, self._move_dir(me, target))
+            return (ActionType.THRUST.value, 8)
 
         # 4. Horizontal if multiple enemies clustered and no ally in arc
         if len(enemies) >= 2:
@@ -111,14 +121,14 @@ class ScriptedController(Controller):
                         ally_in_arc = True
                         break
                 if not ally_in_arc:
-                    return (ActionType.HORIZONTAL.value, self._move_dir(me, target))
+                    return (ActionType.HORIZONTAL.value, 8)
 
         # 5. Vertical if in range
         vert_data = FRAME_DATA[ActionType.VERTICAL]
         if dist <= vert_data.length and face_diff < math.radians(30):
-            return (ActionType.VERTICAL.value, self._move_dir(me, target))
+            return (ActionType.VERTICAL.value, 8)
 
-        # 6. Move toward target
+        # 6. Move toward target (only movement uses 8-way discrete dirs)
         return (ActionType.NOOP.value, self._move_dir(me, target))
 
     def _move_dir(self, me, target) -> int:
