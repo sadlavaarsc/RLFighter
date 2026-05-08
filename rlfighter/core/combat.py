@@ -31,7 +31,10 @@ def _in_hitbox(attacker: AgentState, target: AgentState) -> bool:
 
 
 def resolve_combat(agents: list[AgentState]) -> None:
-    """Apply damage, toughness depletion, stagger, and mark hits."""
+    """Apply damage, toughness depletion, stagger, and mark hits.
+
+    Each attacker can hit a given target at most once per action.
+    """
     for target in agents:
         if target.alive:
             target._hit_this_frame = False
@@ -51,7 +54,10 @@ def resolve_combat(agents: list[AgentState]) -> None:
                 continue
             if target.phase == Phase.DODGE_INVINCIBLE:
                 continue
+            if target.agent_id in attacker._hit_targets:
+                continue
             if _in_hitbox(attacker, target):
+                attacker._hit_targets.add(target.agent_id)
                 target.hp -= data.damage
                 target._hit_this_frame = True
                 if target.hp <= 0.0:
@@ -60,6 +66,7 @@ def resolve_combat(agents: list[AgentState]) -> None:
                     target.phase = Phase.IDLE
                     target.phase_frame_remaining = 0
                     target.buffered_action = None
+                    target._hit_targets.clear()
                     continue
                 target.toughness -= data.impact
                 if target.toughness <= 0.0:

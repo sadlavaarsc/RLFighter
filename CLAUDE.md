@@ -30,9 +30,15 @@ runs/           # tensorboard logs, .gitignore
 ## 核心战斗系统
 
 - 2D 连续 top-down, 20×20 竞技场, 30 逻辑帧/秒
-- 5 种动作：竖劈、横扫（友伤）、突刺、闪避（无敌帧）、回血（3 次, 50% HP）
-- 状态机：IDLE → WINDUP → ACTIVE → RECOVERY，不可打断
+- 5 种动作（已重新平衡）：
+  - **突刺** (THRUST): 快/轻 — windup 6 / active 4 / recovery 8, dmg 10, impact 15, 范围 2.2×0.2
+  - **横扫** (HORIZONTAL): 中/中 — windup 10 / active 6 / recovery 10, dmg 20, impact 25, 扇形 120° R=1.6, **友伤**
+  - **竖劈** (VERTICAL): 慢/重 — windup 15 / active 4 / recovery 16, dmg 35, impact 40, 范围 1.6×0.4
+  - **闪避** (DODGE): 0 / 10 / 8, 无敌帧
+  - **回血** (HEAL): 3 次, 恢复 50% HP, windup 6 / recovery 18
+- 状态机：IDLE → WINDUP → ACTIVE → RECOVERY，不可打断；STAGGER 结束自动回到 IDLE
 - 韧性系统：impact 累计 → 击破进入 30 帧 STAGGER；未受击时缓慢恢复
+- **单动作单命中**：同一攻击的 multi-frame ACTIVE 期间，每个目标最多受击一次（通过 `_hit_targets` 追踪，新动作开始时清空）
 - 闪避：检查敌人攻击类型和实际范围，不再盲目闪避
 
 ## 动作空间（RL）
@@ -56,8 +62,8 @@ runs/           # tensorboard logs, .gitignore
 优先级式 FSM，per-agent 交互跟踪（HP 快照）避免卡死：
 1. 安全回血（HP<40%, 无人在 2.5 内）
 2. 范围感知闪避（敌人 WINDUP 且攻击实际能打到）
-3. 突刺（≤2.0, 面向差<15°; 否则 IDLE 原地精确转向）
-4. 横扫（≥2 敌人在 1.4 内, 扇形内无队友; 否则转向）
+3. 突刺（≤2.2, 面向差<15°; 否则 IDLE 原地精确转向）
+4. 横扫（≥2 敌人在 1.6 内, 扇形内无队友; 否则转向）
 5. 竖劈（≤1.6, 面向差<30°; 否则转向）
 6. 移动靠近（八向离散）
 
@@ -65,11 +71,13 @@ runs/           # tensorboard logs, .gitignore
 
 ## 训练进度
 
-- ✅ 核心战斗模拟 + 23 项 pytest
+- ✅ 核心战斗模拟 + 24 项 pytest
 - ✅ pygame 渲染 + 人工控制器
 - ✅ 硬编码 AI（含鲁莽模式、范围感知闪避、连续精确转向）
 - ✅ 观测/环境/PPO 框架
 - ✅ 1v1 scripted 对手训练完成（100 updates, 204,800 steps）
+- ✅ 数值重平衡（突刺快轻/横扫中中/竖劈慢重）
+- ✅ 修复帧伤 bug（单动作单命中）+ STAGGER 结束 transition 修复
 - 🔄 **下一步**：self-play 训练、1vN/NvN 扩展
 
 ## 关键文件
@@ -87,25 +95,25 @@ runs/           # tensorboard logs, .gitignore
 
 ```bash
 # 运行测试
-rtk proxy pytest tests/ -q
+uv run pytest tests/ -q
 
 # 人工 vs 硬编码
-python -m scripts.play --p1 human --p2 scripted
+uv run python -m scripts.play --p1 human --p2 scripted
 
 # 训练 1v1 vs scripted
-python -m scripts.train --teams 1,1 --opponent scripted --total-steps 204800
+uv run python -m scripts.train --teams 1,1 --opponent scripted --total-steps 204800
 
 # 训练 self-play
-python -m scripts.train --teams 1,1 --opponent self_play --total-steps 500000
+uv run python -m scripts.train --teams 1,1 --opponent self_play --total-steps 500000
 
 # 评估
-python -m scripts.eval --checkpoint checkpoints/1v1_scripted/latest.pt --opponent scripted --episodes 100
+uv run python -m scripts.eval --checkpoint checkpoints/1v1_scripted/latest.pt --opponent scripted --episodes 100
 
 # 加载 RL 对战
-python -m scripts.play --p1 rl --p2 scripted --checkpoint checkpoints/1v1_scripted/latest.pt
+uv run python -m scripts.play --p1 rl --p2 scripted --checkpoint checkpoints/1v1_scripted/latest.pt
 
 # tensorboard
-tensorboard --logdir runs/
+uv run tensorboard --logdir runs/
 ```
 
 ## 已知注意事项

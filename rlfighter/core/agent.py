@@ -26,6 +26,7 @@ class AgentState:
 
     alive: bool = True
     _hit_this_frame: bool = False
+    _hit_targets: set[int] = field(default_factory=set)
 
     def reset(self, pos: np.ndarray, facing: float = 0.0) -> None:
         self.hp = self.max_hp
@@ -40,3 +41,4 @@ class AgentState:
         self.buffered_move_dir = 8
         self.alive = True
         self._hit_this_frame = False
+        self._hit_targets.clear()

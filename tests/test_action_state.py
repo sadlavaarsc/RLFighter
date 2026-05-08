@@ -14,16 +14,16 @@ def test_phase_sequence_vertical():
     agent = world.agents[0]
     world.step({agent.agent_id: (ActionType.VERTICAL, 2)})  # face east
     assert agent.phase == Phase.WINDUP
-    assert agent.phase_frame_remaining == 18
-    for _ in range(18):
+    assert agent.phase_frame_remaining == 15
+    for _ in range(15):
         world.step({agent.agent_id: (ActionType.NOOP, 8)})
     assert agent.phase == Phase.ACTIVE
     assert agent.phase_frame_remaining == 4
     for _ in range(4):
         world.step({agent.agent_id: (ActionType.NOOP, 8)})
     assert agent.phase == Phase.RECOVERY
-    assert agent.phase_frame_remaining == 14
-    for _ in range(14):
+    assert agent.phase_frame_remaining == 16
+    for _ in range(16):
         world.step({agent.agent_id: (ActionType.NOOP, 8)})
     assert agent.phase == Phase.IDLE
 
@@ -33,12 +33,12 @@ def test_locked_during_animation():
     agent = world.agents[0]
     world.step({agent.agent_id: (ActionType.THRUST, 2)})
     # During windup, attempt to start another action
-    for _ in range(8):
+    for _ in range(6):
         world.step({agent.agent_id: (ActionType.VERTICAL, 2)})
         assert agent.action_type == ActionType.THRUST
     # Now in active
     assert agent.phase == Phase.ACTIVE
-    for _ in range(6):
+    for _ in range(4):
         world.step({agent.agent_id: (ActionType.VERTICAL, 2)})
         assert agent.action_type == ActionType.THRUST
 
@@ -47,16 +47,16 @@ def test_buffer_recovery():
     world = World([1, 1], seed=0)
     agent = world.agents[0]
     world.step({agent.agent_id: (ActionType.THRUST, 2)})
-    # Advance to recovery (8 windup + 6 active = 14 frames)
-    for _ in range(14):
+    # Advance to recovery (6 windup + 4 active = 10 frames)
+    for _ in range(10):
         world.step({agent.agent_id: (ActionType.NOOP, 8)})
     assert agent.phase == Phase.RECOVERY
-    assert agent.phase_frame_remaining == 10
+    assert agent.phase_frame_remaining == 8
     # Buffer too early should be ignored
     world.step({agent.agent_id: (ActionType.VERTICAL, 2)})
     assert agent.buffered_action is None
     # Advance to last 4 frames of recovery
-    for _ in range(5):
+    for _ in range(3):
         world.step({agent.agent_id: (ActionType.NOOP, 8)})
     assert agent.phase_frame_remaining == 4
     world.step({agent.agent_id: (ActionType.VERTICAL, 2)})

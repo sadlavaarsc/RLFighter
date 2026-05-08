@@ -157,6 +157,11 @@ class World:
     def _transition_phase(self, agent: AgentState) -> None:
         if agent.phase == Phase.IDLE:
             return
+        if agent.phase == Phase.STAGGER:
+            agent.phase = Phase.IDLE
+            agent.action_type = ActionType.NOOP
+            agent.phase_frame_remaining = 0
+            return
         seq = phase_sequence(agent.action_type)
         try:
             idx = seq.index(agent.phase)
@@ -189,6 +194,7 @@ class World:
         if action_type == ActionType.HEAL and (agent.heal_charges <= 0 or agent.hp >= agent.max_hp):
             return
         agent.action_type = action_type
+        agent._hit_targets.clear()
         seq = phase_sequence(action_type)
         if not seq:
             agent.phase = Phase.IDLE

@@ -3,7 +3,7 @@ import math
 import numpy as np
 import pytest
 
-from rlfighter.core.action import ActionType, Phase
+from rlfighter.core.action import ActionType, FRAME_DATA, Phase
 from rlfighter.core.agent import AgentState
 from rlfighter.core.combat import resolve_combat
 from rlfighter.core.constants import BASE_HP, BASE_TOUGHNESS
@@ -82,7 +82,7 @@ def test_toughness_break_stagger():
     target.toughness = 10.0  # low toughness
     world.step({attacker.agent_id: (ActionType.VERTICAL, 2)})
     # Advance to active
-    for _ in range(18):
+    for _ in range(15):
         world.step({attacker.agent_id: (ActionType.NOOP, 8)})
     assert target.toughness == BASE_TOUGHNESS
     assert target.phase == Phase.STAGGER
@@ -118,3 +118,25 @@ def test_horizontal_arc_miss():
     target = _make_agent(1, 1, math.cos(angle), math.sin(angle), 0.0)
     resolve_combat([attacker, target])
     assert target.hp == BASE_HP
+
+
+def test_single_hit_per_action():
+    """Multi-frame ACTIVE attacks should only hit a target once per action."""
+    world = World([1, 1], seed=0)
+    attacker = world.agents[0]
+    target = world.agents[1]
+    attacker.pos = np.array([0.0, 0.0], dtype=np.float32)
+    attacker.facing = 0.0
+    target.pos = np.array([1.0, 0.0], dtype=np.float32)
+    target.hp = BASE_HP
+
+    # Start a horizontal attack (active=6 frames)
+    world.step({attacker.agent_id: (ActionType.HORIZONTAL, 2)})
+    # Advance through active and recovery (10 windup + 6 active + 10 recovery)
+    for _ in range(26):
+        world.step({attacker.agent_id: (ActionType.NOOP, 8)})
+    assert attacker.phase == Phase.IDLE
+
+    # HP should only drop by one hit's worth, not 6×
+    assert target.hp == BASE_HP - FRAME_DATA[ActionType.HORIZONTAL].damage
+    assert target.agent_id in attacker._hit_targets
