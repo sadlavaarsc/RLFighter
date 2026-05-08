@@ -94,27 +94,23 @@ class ScriptedController(Controller):
                 if can_hit:
                     return (ActionType.DODGE.value, 8)
 
-        # 0. Face the target before committing to an attack.
-        #    When idle we can snap to the exact angle in-place (no movement needed).
-        max_attack_range = max(
-            FRAME_DATA[ActionType.VERTICAL].length,
-            FRAME_DATA[ActionType.THRUST].length,
-            FRAME_DATA[ActionType.HORIZONTAL].range,
-        )
-        if me.phase == Phase.IDLE and dist <= max_attack_range and face_diff > math.radians(30):
-            me.facing = angle_to_target
-            return (ActionType.NOOP.value, 8)
-
-        # 3. Thrust if close and facing
+        # 3. Thrust if close and facing.  If facing is off, correct first.
         thrust_data = FRAME_DATA[ActionType.THRUST]
-        if dist <= thrust_data.length and face_diff < math.radians(15):
+        if dist <= thrust_data.length:
+            if me.phase == Phase.IDLE and face_diff >= math.radians(15):
+                me.facing = angle_to_target
+                return (ActionType.NOOP.value, 8)
             return (ActionType.THRUST.value, 8)
 
-        # 4. Horizontal if multiple enemies clustered and no ally in arc
+        # 4. Horizontal if multiple enemies clustered and no ally in arc.
+        #    Horizontal has a wide arc (110 deg), so facing check is very lenient.
         if len(enemies) >= 2:
             nearby_enemies = [e for e in enemies if _dist(me, e) <= FRAME_DATA[ActionType.HORIZONTAL].range]
             if len(nearby_enemies) >= 2:
                 arc_rad = math.radians(FRAME_DATA[ActionType.HORIZONTAL].arc_deg)
+                if me.phase == Phase.IDLE and face_diff >= arc_rad / 2:
+                    me.facing = angle_to_target
+                    return (ActionType.NOOP.value, 8)
                 ally_in_arc = False
                 for ally in allies:
                     a_angle = math.atan2(ally.pos[1] - me.pos[1], ally.pos[0] - me.pos[0])
@@ -124,9 +120,12 @@ class ScriptedController(Controller):
                 if not ally_in_arc:
                     return (ActionType.HORIZONTAL.value, 8)
 
-        # 5. Vertical if in range
+        # 5. Vertical if in range.  If facing is off, correct first.
         vert_data = FRAME_DATA[ActionType.VERTICAL]
-        if dist <= vert_data.length and face_diff < math.radians(30):
+        if dist <= vert_data.length:
+            if me.phase == Phase.IDLE and face_diff >= math.radians(30):
+                me.facing = angle_to_target
+                return (ActionType.NOOP.value, 8)
             return (ActionType.VERTICAL.value, 8)
 
         # 6. Move toward target (only movement uses 8-way discrete dirs)
