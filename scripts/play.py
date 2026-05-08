@@ -5,6 +5,7 @@ import pygame
 
 from rlfighter.agents.base import Controller
 from rlfighter.agents.human import HumanController
+from rlfighter.agents.scripted import ScriptedController
 from rlfighter.core.action import ActionType
 from rlfighter.core.world import World
 from rlfighter.render.pygame_view import Renderer
@@ -13,12 +14,14 @@ from rlfighter.render.pygame_view import Renderer
 def _resolve_controller(name: str) -> Controller:
     if name == "human":
         return HumanController()
+    if name == "scripted":
+        return ScriptedController()
     raise ValueError(f"Unknown controller: {name}")
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--p1", default="human", choices=["human"])
+    parser.add_argument("--p1", default="human", choices=["human", "scripted"])
     parser.add_argument("--p2", default="scripted", choices=["human", "scripted"])
     parser.add_argument("--speed", type=int, default=30, help="render FPS")
     parser.add_argument("--max-ticks", type=int, default=3000)
