@@ -8,6 +8,7 @@ from rlfighter.core.agent import AgentState
 from rlfighter.core.combat import resolve_combat
 from rlfighter.core.constants import BASE_HP, BASE_TOUGHNESS
 from rlfighter.core.world import World
+from rlfighter.env.arena import Arena
 
 
 def _make_agent(agent_id: int, team_id: int, x: float, y: float, facing: float) -> AgentState:
@@ -140,3 +141,82 @@ def test_single_hit_per_action():
     # HP should only drop by one hit's worth, not 6×
     assert target.hp == BASE_HP - FRAME_DATA[ActionType.HORIZONTAL].damage
     assert target.agent_id in attacker._hit_targets
+
+
+def test_miss_penalty():
+    """Swinging and missing should incur a penalty when ACTIVE ends."""
+    arena = Arena([1, 1], seed=0)
+    attacker = arena.world.agents[0]
+    target = arena.world.agents[1]
+    # Place target far away so attack will miss
+    attacker.pos = np.array([0.0, 0.0], dtype=np.float32)
+    attacker.facing = 0.0
+    target.pos = np.array([10.0, 0.0], dtype=np.float32)
+
+    # Start a vertical attack (slow, heavy miss penalty)
+    arena.step({attacker.agent_id: (ActionType.VERTICAL, 2)})
+    # Advance through windup (15) + active (4); miss penalty fires on the
+    # ACTIVE→RECOVERY transition frame.
+    transition_reward = None
+    for _ in range(19):
+        _, r, _, _, _ = arena.step({attacker.agent_id: (ActionType.NOOP, 8)})
+        if attacker.phase == Phase.RECOVERY and transition_reward is None:
+            transition_reward = r[attacker.agent_id]
+
+    assert attacker.phase == Phase.RECOVERY
+    assert attacker._hit_targets == set()
+    # In 1v1 team reward scales individual by 1.3x; miss penalty = -10.001 * 1.3
+    assert transition_reward == pytest.approx(-13.0013, abs=0.1)
+
+
+def test_miss_penalty_scale():
+    """Miss penalty: THRUST < HORIZONTAL < VERTICAL."""
+    penalties = {}
+    for action in (ActionType.THRUST, ActionType.HORIZONTAL, ActionType.VERTICAL):
+        arena = Arena([1, 1], seed=0)
+        attacker = arena.world.agents[0]
+        target = arena.world.agents[1]
+        attacker.pos = np.array([0.0, 0.0], dtype=np.float32)
+        attacker.facing = 0.0
+        target.pos = np.array([10.0, 0.0], dtype=np.float32)
+
+        arena.step({attacker.agent_id: (action, 2)})
+        # Advance through windup + active; capture the ACTIVE→RECOVERY reward
+        windup = FRAME_DATA[action].windup
+        active = FRAME_DATA[action].active
+        transition_reward = None
+        for _ in range(windup + active):
+            _, r, _, _, _ = arena.step({attacker.agent_id: (ActionType.NOOP, 8)})
+            if attacker.phase == Phase.RECOVERY and transition_reward is None:
+                transition_reward = r[attacker.agent_id]
+
+        penalties[action] = transition_reward
+
+    assert penalties[ActionType.THRUST] > penalties[ActionType.HORIZONTAL]
+    assert penalties[ActionType.HORIZONTAL] > penalties[ActionType.VERTICAL]
+
+
+def test_no_miss_penalty_on_hit():
+    """Hitting the target should not trigger miss penalty."""
+    arena = Arena([1, 1], seed=0)
+    attacker = arena.world.agents[0]
+    target = arena.world.agents[1]
+    attacker.pos = np.array([0.0, 0.0], dtype=np.float32)
+    attacker.facing = 0.0
+    target.pos = np.array([1.0, 0.0], dtype=np.float32)
+
+    arena.step({attacker.agent_id: (ActionType.VERTICAL, 2)})
+    # Advance through windup (15) + active (4)
+    first_active_reward = None
+    transition_reward = None
+    for _ in range(19):
+        _, r, _, _, _ = arena.step({attacker.agent_id: (ActionType.NOOP, 8)})
+        if attacker.phase == Phase.ACTIVE and first_active_reward is None:
+            first_active_reward = r[attacker.agent_id]
+        if attacker.phase == Phase.RECOVERY and transition_reward is None:
+            transition_reward = r[attacker.agent_id]
+
+    # Damage reward applies on the first active frame (~+45.5 with team scaling)
+    assert first_active_reward == pytest.approx(45.4987, abs=0.1)
+    # On the transition frame there is no miss penalty, just step penalty (~-0.0013)
+    assert transition_reward == pytest.approx(-0.0013, abs=0.01)
