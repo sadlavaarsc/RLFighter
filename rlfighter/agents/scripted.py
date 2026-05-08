@@ -23,12 +23,46 @@ def _angle_diff(a, b) -> float:
 
 
 class ScriptedController(Controller):
-    """Simple rule-based FSM agent."""
+    """Simple rule-based FSM agent.
+
+    Tracks per-agent interaction history to avoid getting stuck in
+    infinite dodge loops when no actual hits are landing.
+    """
+
+    # After this many frames without any hit landed or taken, skip dodge and push aggressively.
+    RECKLESS_THRESHOLD = 90
+
+    def __init__(self) -> None:
+        # agent_id -> {other_id: hp} snapshot from previous act() call
+        self._hp_snapshots: dict[int, dict[int, float]] = {}
+        # agent_id -> frames since last interaction
+        self._idle_frames: dict[int, int] = {}
 
     def act(self, agent_id: int, world: World) -> tuple[int, int]:
         me = world.agents[agent_id]
         if not me.alive:
             return (ActionType.NOOP.value, 8)
+
+        # ---- interaction tracking (per-agent snapshot) ----
+        prev_snapshot = self._hp_snapshots.get(agent_id, {})
+        curr_snapshot = {a.agent_id: a.hp for a in world.agents}
+
+        interaction = False
+        if me.hp < prev_snapshot.get(agent_id, me.hp):
+            interaction = True  # I got hit
+        for other in world.agents:
+            if other.team_id != me.team_id:
+                if other.hp < prev_snapshot.get(other.agent_id, other.hp):
+                    interaction = True  # I hit someone
+
+        if interaction:
+            self._idle_frames[agent_id] = 0
+        else:
+            self._idle_frames[agent_id] = self._idle_frames.get(agent_id, 0) + 1
+
+        self._hp_snapshots[agent_id] = curr_snapshot
+        reckless = self._idle_frames.get(agent_id, 0) > self.RECKLESS_THRESHOLD
+        # ---------------------------------------------------
 
         enemies = [a for a in world.agents if a.team_id != me.team_id and a.alive]
         allies = [a for a in world.agents if a.team_id == me.team_id and a.agent_id != me.agent_id and a.alive]
@@ -47,9 +81,18 @@ class ScriptedController(Controller):
             if safe:
                 return (ActionType.HEAL.value, 8)
 
-        # 2. Dodge if enemy is winding up and we're in range
-        if target.phase == Phase.WINDUP and dist < _THREAT_RANGE:
-            return (ActionType.DODGE.value, 8)
+        # 2. Dodge if enemy is winding up and the attack can actually reach us.
+        #    When "reckless" (stuck for too long) we skip this entirely.
+        if not reckless and target.phase == Phase.WINDUP and dist < _THREAT_RANGE:
+            attack_data = FRAME_DATA.get(target.action_type)
+            if attack_data is not None and attack_data.damage > 0.0:
+                can_hit = False
+                if target.action_type == ActionType.HORIZONTAL:
+                    can_hit = dist <= attack_data.range + 0.2
+                elif target.action_type in (ActionType.VERTICAL, ActionType.THRUST):
+                    can_hit = dist <= attack_data.length + 0.3
+                if can_hit:
+                    return (ActionType.DODGE.value, 8)
 
         # 3. Thrust if close and facing
         thrust_data = FRAME_DATA[ActionType.THRUST]
