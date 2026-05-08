@@ -218,8 +218,8 @@ def test_no_miss_penalty_on_hit():
 
     # Damage reward applies on the first active frame (~+45.5 with team scaling)
     assert first_active_reward == pytest.approx(45.4987, abs=0.1)
-    # On the transition frame there is no miss penalty, just step penalty (~-0.0013)
-    assert transition_reward == pytest.approx(-0.0013, abs=0.01)
+    # On the transition frame: step penalty (-0.001) + aiming reward (+0.03) scaled by 1.3x
+    assert transition_reward == pytest.approx(0.0377, abs=0.01)
 
 
 def test_high_level_interrupts_low_level():

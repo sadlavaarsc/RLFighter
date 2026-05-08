@@ -8,8 +8,8 @@ from rlfighter.core.world import World
 def test_observation_shape():
     world = World([1, 1], seed=0)
     obs = build_observation(world.agents[0], world)
-    # self: 20, others: 4 * 16 = 64, total = 84
-    assert obs.shape == (84,)
+    # self: 20, others: 4 * 19 = 76, total = 96
+    assert obs.shape == (96,)
     assert obs.dtype == np.float32
 
 
@@ -26,10 +26,10 @@ def test_mask_for_missing_others():
     obs = build_observation(world.agents[0], world)
     # First other starts at index 20, mask is at index 20
     assert obs[20] == 1.0
-    # Second other (missing) mask at index 20 + 16 = 36
-    assert obs[36] == 0.0
-    assert obs[52] == 0.0
-    assert obs[68] == 0.0
+    # Second other (missing) mask at index 20 + 19 = 39
+    assert obs[39] == 0.0
+    assert obs[58] == 0.0
+    assert obs[77] == 0.0
 
 
 def test_action_type_onehot():

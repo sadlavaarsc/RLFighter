@@ -24,6 +24,7 @@ def main():
     parser.add_argument("--save-interval", type=int, default=10)
     parser.add_argument("--logdir", default="runs")
     parser.add_argument("--checkpoint-dir", default="checkpoints")
+    parser.add_argument("--resume", default=None, help="path to checkpoint to resume from")
     args = parser.parse_args()
 
     team_sizes = [int(x) for x in args.teams.split(",")]
@@ -48,6 +49,7 @@ def main():
         save_interval=args.save_interval,
         logdir=args.logdir,
         checkpoint_dir=args.checkpoint_dir,
+        resume=args.resume,
     )
     trainer.train()
 

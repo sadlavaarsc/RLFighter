@@ -2,7 +2,7 @@ import math
 
 import numpy as np
 
-from rlfighter.core.action import ActionType, Phase
+from rlfighter.core.action import FRAME_DATA, ActionType, Phase
 from rlfighter.core.agent import AgentState
 from rlfighter.core.constants import ARENA_SIZE, K_NEAREST
 from rlfighter.core.world import World
@@ -28,9 +28,27 @@ def build_observation(agent: AgentState, world: World) -> np.ndarray:
         if i < len(selected):
             other_obs.append(_build_other_obs(agent, selected[i]))
         else:
-            other_obs.append(np.zeros(16, dtype=np.float32))
+            other_obs.append(np.zeros(19, dtype=np.float32))
 
     return np.concatenate([self_obs] + other_obs)
+
+
+def _phase_max_frames(action: ActionType, phase: Phase) -> int:
+    """Return the total frame count for a given action+phase."""
+    data = FRAME_DATA.get(action)
+    if data is None:
+        return 1
+    if phase == Phase.WINDUP:
+        return data.windup
+    if phase == Phase.ACTIVE:
+        return data.active
+    if phase == Phase.RECOVERY:
+        return data.recovery
+    if phase == Phase.DODGE_INVINCIBLE:
+        return data.active
+    if phase == Phase.STAGGER:
+        return 30
+    return 1
 
 
 def _build_self_obs(agent: AgentState) -> np.ndarray:
@@ -39,18 +57,10 @@ def _build_self_obs(agent: AgentState) -> np.ndarray:
     heal_ratio = agent.heal_charges / 3.0
 
     phase_progress = 0.0
-    if agent.phase_frame_remaining > 0:
-        # This is a simplified progress; exact max depends on phase
-        # We just use remaining / typical max as a proxy
-        max_frames = {
-            Phase.WINDUP: 18,
-            Phase.ACTIVE: 10,
-            Phase.RECOVERY: 18,
-            Phase.STAGGER: 30,
-            Phase.DODGE_INVINCIBLE: 10,
-            Phase.IDLE: 1,
-        }.get(agent.phase, 1)
+    max_frames = _phase_max_frames(agent.action_type, agent.phase)
+    if max_frames > 0:
         phase_progress = 1.0 - (agent.phase_frame_remaining / max_frames)
+        phase_progress = max(0.0, min(1.0, phase_progress))
 
     return np.concatenate([
         np.array([hp_ratio, t_ratio, heal_ratio], dtype=np.float32),
@@ -72,6 +82,12 @@ def _build_other_obs(me: AgentState, other: AgentState) -> np.ndarray:
     hp_ratio = other.hp / other.max_hp if other.max_hp > 0 else 0.0
     t_ratio = other.toughness / other.max_toughness if other.max_toughness > 0 else 0.0
 
+    other_max_frames = _phase_max_frames(other.action_type, other.phase)
+    other_phase_progress = 0.0
+    if other_max_frames > 0:
+        other_phase_progress = 1.0 - (other.phase_frame_remaining / other_max_frames)
+        other_phase_progress = max(0.0, min(1.0, other_phase_progress))
+
     return np.concatenate([
         np.array([
             1.0,  # mask
@@ -84,5 +100,9 @@ def _build_other_obs(me: AgentState, other: AgentState) -> np.ndarray:
             math.sin(rel_angle),
         ], dtype=np.float32),
         _one_hot(other.action_type.value, 6),
-        np.array([hp_ratio, t_ratio], dtype=np.float32),
+        np.array([
+            hp_ratio, t_ratio,
+            math.cos(other.facing), math.sin(other.facing),
+            other_phase_progress,
+        ], dtype=np.float32),
     ])

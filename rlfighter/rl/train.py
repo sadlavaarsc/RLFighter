@@ -37,6 +37,7 @@ class Trainer:
         logdir: str = "runs",
         checkpoint_dir: str = "checkpoints",
         device: str = "cpu",
+        resume: str | None = None,
     ) -> None:
         self.team_sizes = team_sizes
         self.opponent_type = opponent
@@ -62,7 +63,7 @@ class Trainer:
         torch.manual_seed(seed)
         np.random.seed(seed)
 
-        self.policy = ActorCritic(obs_dim=84, hidden_dim=hidden_dim).to(self.device)
+        self.policy = ActorCritic(obs_dim=96, hidden_dim=hidden_dim).to(self.device)
         self.optimizer = torch.optim.Adam(self.policy.parameters(), lr=lr)
 
         self.envs = [Arena(team_sizes, seed=seed + i) for i in range(num_envs)]
@@ -70,6 +71,12 @@ class Trainer:
             env.reset()
 
         self.scripted = ScriptedController() if opponent == "scripted" else None
+
+        if resume is not None:
+            checkpoint = torch.load(resume, map_location=self.device)
+            self.policy.load_state_dict(checkpoint["policy"])
+            self.optimizer.load_state_dict(checkpoint["optimizer"])
+            print(f"Resumed from {resume}")
 
         self.writer = SummaryWriter(log_dir=f"{logdir}/{datetime.now().strftime('%Y%m%d_%H%M%S')}")
         os.makedirs(checkpoint_dir, exist_ok=True)
