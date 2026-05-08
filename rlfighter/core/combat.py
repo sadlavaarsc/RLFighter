@@ -2,7 +2,7 @@ import math
 
 import numpy as np
 
-from rlfighter.core.action import ActionType, FRAME_DATA, Phase
+from rlfighter.core.action import ActionType, FRAME_DATA, IMPACT_LEVEL, Phase, POISE_LEVEL
 from rlfighter.core.agent import AgentState
 from rlfighter.core.constants import AGENT_RADIUS, BASE_HP, BASE_TOUGHNESS
 from rlfighter.core.hitbox import point_in_oriented_rect, point_in_sector
@@ -30,10 +30,21 @@ def _in_hitbox(attacker: AgentState, target: AgentState) -> bool:
     return False
 
 
+def _break_action(agent: AgentState, long_stagger: bool = False) -> None:
+    """Interrupt the agent's current action and put them into stagger."""
+    agent.phase = Phase.STAGGER
+    agent.phase_frame_remaining = 30 if long_stagger else 5
+    agent.action_type = ActionType.NOOP
+    agent.buffered_action = None
+    agent.buffered_move_dir = 8
+    agent._hit_targets.clear()
+
+
 def resolve_combat(agents: list[AgentState]) -> None:
-    """Apply damage, toughness depletion, stagger, and mark hits.
+    """Apply damage, toughness depletion, stagger/interrupt, and mark hits.
 
     Each attacker can hit a given target at most once per action.
+    Higher impact-level attacks can interrupt lower-poise actions.
     """
     for target in agents:
         if target.alive:
@@ -71,8 +82,12 @@ def resolve_combat(agents: list[AgentState]) -> None:
                 target.toughness -= data.impact
                 if target.toughness <= 0.0:
                     target.toughness = BASE_TOUGHNESS
-                    target.phase = Phase.STAGGER
-                    target.phase_frame_remaining = 30
-                elif data.impact > 0.0 and target.phase in (Phase.IDLE, Phase.RECOVERY):
-                    target.phase = Phase.STAGGER
-                    target.phase_frame_remaining = 5
+                    _break_action(target, long_stagger=True)
+                else:
+                    attacker_level = IMPACT_LEVEL.get(attacker.action_type, 0)
+                    target_poise = POISE_LEVEL.get(target.action_type, 0)
+                    if attacker_level > target_poise:
+                        _break_action(target, long_stagger=False)
+                    elif target_poise == 0:
+                        # Non-attack states (IDLE, RECOVERY, HEAL, etc.) always stagger
+                        _break_action(target, long_stagger=False)

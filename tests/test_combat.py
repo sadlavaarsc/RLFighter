@@ -220,3 +220,71 @@ def test_no_miss_penalty_on_hit():
     assert first_active_reward == pytest.approx(45.4987, abs=0.1)
     # On the transition frame there is no miss penalty, just step penalty (~-0.0013)
     assert transition_reward == pytest.approx(-0.0013, abs=0.01)
+
+
+def test_high_level_interrupts_low_level():
+    """VERTICAL (level 3) should interrupt THRUST (level 1)."""
+    attacker = _make_agent(0, 0, 0.0, 0.0, 0.0)
+    attacker.phase = Phase.ACTIVE
+    attacker.action_type = ActionType.VERTICAL
+    target = _make_agent(1, 1, 1.0, 0.0, 0.0)
+    target.phase = Phase.ACTIVE
+    target.action_type = ActionType.THRUST
+    resolve_combat([attacker, target])
+    assert target.phase == Phase.STAGGER
+    assert target.action_type == ActionType.NOOP
+
+
+def test_low_level_cannot_interrupt_high_level():
+    """THRUST (level 1) should not interrupt VERTICAL (level 3)."""
+    attacker = _make_agent(0, 0, 0.0, 0.0, 0.0)
+    attacker.phase = Phase.ACTIVE
+    attacker.action_type = ActionType.THRUST
+    target = _make_agent(1, 1, 1.0, 0.0, 0.0)
+    target.phase = Phase.ACTIVE
+    target.action_type = ActionType.VERTICAL
+    resolve_combat([attacker, target])
+    assert target.phase == Phase.ACTIVE
+    assert target.action_type == ActionType.VERTICAL
+
+
+def test_equal_level_no_interrupt():
+    """Same-level attacks trade hits without interrupting each other."""
+    attacker = _make_agent(0, 0, 0.0, 0.0, 0.0)
+    attacker.phase = Phase.ACTIVE
+    attacker.action_type = ActionType.HORIZONTAL
+    target = _make_agent(1, 1, 1.0, 0.0, 0.0)
+    target.phase = Phase.ACTIVE
+    target.action_type = ActionType.HORIZONTAL
+    resolve_combat([attacker, target])
+    assert target.phase == Phase.ACTIVE
+    assert target.action_type == ActionType.HORIZONTAL
+
+
+def test_non_attack_state_still_staggers():
+    """IDLE and RECOVERY targets always get staggered on hit."""
+    for phase in (Phase.IDLE, Phase.RECOVERY):
+        attacker = _make_agent(0, 0, 0.0, 0.0, 0.0)
+        attacker.phase = Phase.ACTIVE
+        attacker.action_type = ActionType.THRUST
+        target = _make_agent(1, 1, 1.0, 0.0, 0.0)
+        target.phase = phase
+        target.action_type = ActionType.NOOP
+        resolve_combat([attacker, target])
+        assert target.phase == Phase.STAGGER, f"failed for phase {phase}"
+
+
+def test_interrupt_clears_buffered_action():
+    """Getting interrupted should discard any buffered follow-up."""
+    attacker = _make_agent(0, 0, 0.0, 0.0, 0.0)
+    attacker.phase = Phase.ACTIVE
+    attacker.action_type = ActionType.HORIZONTAL
+    target = _make_agent(1, 1, 1.0, 0.0, 0.0)
+    target.phase = Phase.ACTIVE
+    target.action_type = ActionType.THRUST
+    target.buffered_action = ActionType.VERTICAL
+    target.buffered_move_dir = 2
+    resolve_combat([attacker, target])
+    assert target.phase == Phase.STAGGER
+    assert target.buffered_action is None
+    assert target.buffered_move_dir == 8

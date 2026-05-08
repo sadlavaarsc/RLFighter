@@ -89,3 +89,18 @@ def phase_sequence(action: ActionType) -> list[Phase]:
         seq.append(Phase.ACTIVE)
     seq.append(Phase.RECOVERY)
     return seq
+
+
+# Poise (hyper-armor) level: higher = harder to interrupt during attack animation.
+POISE_LEVEL: dict[ActionType, int] = {
+    ActionType.VERTICAL: 3,
+    ActionType.HORIZONTAL: 2,
+    ActionType.THRUST: 1,
+}
+
+# Impact (interrupt) level: higher = can interrupt lower-poise actions.
+IMPACT_LEVEL: dict[ActionType, int] = {
+    ActionType.VERTICAL: 3,
+    ActionType.HORIZONTAL: 2,
+    ActionType.THRUST: 1,
+}

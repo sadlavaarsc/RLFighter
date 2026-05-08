@@ -36,7 +36,13 @@ runs/           # tensorboard logs, .gitignore
   - **竖劈** (VERTICAL): 慢/重 — windup 15 / active 4 / recovery 16, dmg 35, impact 40, 范围 1.6×0.4
   - **闪避** (DODGE): 0 / 10 / 8, 无敌帧
   - **回血** (HEAL): 3 次, 恢复 50% HP, windup 6 / recovery 18
-- 状态机：IDLE → WINDUP → ACTIVE → RECOVERY，不可打断；STAGGER 结束自动回到 IDLE
+- 状态机：IDLE → WINDUP → ACTIVE → RECOVERY；STAGGER 结束自动回到 IDLE
+- **霸体与打断**：
+  - 每个攻击动作有霸体等级（Poise）和打断等级（Impact）：**竖劈 3 ＞ 横扫 2 ＞ 突刺 1**
+  - 攻击者 Impact ＞ 被击者 Poise → **打断**对方，强制进入 5 帧 STAGGER 并重置动作
+  - 攻击者 Impact ≤ 被击者 Poise → 对方**霸体生效**，继续完成动作，仅承受 HP/韧性 伤害
+  - 非攻击状态（IDLE / RECOVERY / HEAL 等，Poise=0）挨打仍进短 STAGGER（5 帧）
+  - 韧性被击破（toughness ≤ 0）→ 无论霸体等级，强制进入 30 帧 STAGGER
 - 韧性系统：impact 累计 → 击破进入 30 帧 STAGGER；未受击时缓慢恢复
 - **单动作单命中**：同一攻击的 multi-frame ACTIVE 期间，每个目标最多受击一次（通过 `_hit_targets` 追踪，新动作开始时清空）
 - 闪避：检查敌人攻击类型和实际范围，不再盲目闪避
